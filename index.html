@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LAR Mart</title>
 
+<!-- PWA Settings -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+
 <style>
 body{
   font-family: Arial;
@@ -13,19 +17,10 @@ body{
 }
 
 .header{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
+  text-align:center;
 }
 
-.logo{
-  height:40px;
-}
-
-h2{
-  margin:0;
-}
+h2{ margin:0; }
 
 .top-add{
   background:white;
@@ -57,13 +52,6 @@ h2{
 }
 
 input{ padding:4px; }
-
-.category-name{
-  font-weight:bold;
-  font-size:18px;
-  border:none;
-  background:transparent;
-}
 
 .qty{
   width:40px;
@@ -98,10 +86,8 @@ button{
 
 #searchBar{
   width:100%;
-  margin-bottom:10px;
   padding:8px;
-  border-radius:6px;
-  border:1px solid #ccc;
+  margin-bottom:10px;
 }
 </style>
 </head>
@@ -109,12 +95,11 @@ button{
 <body>
 
 <div class="header">
-  <img src="logo.png" class="logo">
   <h2>LAR Mart</h2>
 </div>
 
 <div class="top-add">
-  <input id="searchBar" placeholder="Search category or item..." onkeyup="render()">
+  <input id="searchBar" placeholder="Search..." onkeyup="render()">
   <input id="newCategory" placeholder="New Category">
   <button class="add" onclick="addCategory()">Add Category</button>
   <button class="delete" onclick="deleteAll()">Delete All</button>
@@ -156,30 +141,21 @@ function render(){
   const list=document.getElementById("list");
   list.innerHTML="";
 
-  const searchValue=document.getElementById("searchBar").value.toLowerCase();
+  const search=document.getElementById("searchBar").value.toLowerCase();
 
-  const sortedCategories=Object.keys(groceries).sort((a,b)=>a.localeCompare(b));
+  const sorted=Object.keys(groceries).sort((a,b)=>a.localeCompare(b));
 
-  sortedCategories.forEach(category=>{
+  sorted.forEach(category=>{
 
-    const categoryMatch=category.toLowerCase().includes(searchValue);
-
-    let hasMatch=false;
-
-    groceries[category].forEach(item=>{
-      if(item.name.toLowerCase().includes(searchValue) || categoryMatch){
-        hasMatch=true;
-      }
-    });
-
-    if(searchValue && !hasMatch) return;
+    if(search && !category.toLowerCase().includes(search) &&
+       !groceries[category].some(i=>i.name.toLowerCase().includes(search)))
+       return;
 
     const catDiv=document.createElement("div");
     catDiv.className="category";
 
     catDiv.innerHTML=`
-      <input class="category-name"
-        value="${category}"
+      <input value="${category}"
         onchange="renameCategory('${category}',this.value)">
       <button class="delete"
         onclick="deleteCategory('${category}')">
@@ -190,10 +166,7 @@ function render(){
 
     groceries[category].forEach((item,index)=>{
 
-      if(searchValue &&
-         !categoryMatch &&
-         !item.name.toLowerCase().includes(searchValue))
-         return;
+      if(search && !item.name.toLowerCase().includes(search)) return;
 
       const itemDiv=document.createElement("div");
       itemDiv.className="item";
@@ -212,17 +185,13 @@ function render(){
         <div class="row">
           <button class="minus"
             onclick="changeQty('${category}',${index},-1)">-</button>
-
           <span class="qty">${item.qty}</span>
-
           <button class="plus"
             onclick="changeQty('${category}',${index},1)">+</button>
-
           <button class="select"
             onclick="toggleSelect('${category}',${index})">
             ${item.selected ? "Unselect":"Select"}
           </button>
-
           <button class="delete"
             onclick="deleteItem('${category}',${index})">
             Delete
@@ -233,17 +202,39 @@ function render(){
       catDiv.appendChild(itemDiv);
     });
 
-    catDiv.innerHTML += `
+    catDiv.innerHTML+=`
       <input id="item-${category}" placeholder="Item Name">
       <input id="price-${category}" type="number" placeholder="Price">
-      <button class="add"
-        onclick="addItem('${category}')">
-        Add Item
-      </button>
+      <button class="add" onclick="addItem('${category}')">Add Item</button>
     `;
 
     list.appendChild(catDiv);
   });
+}
+
+/* All existing logic unchanged */
+
+function addCategory(){
+  const name=document.getElementById("newCategory").value.trim();
+  if(!name || groceries[name]) return;
+  groceries[name]=[];
+  save();
+  render();
+}
+
+function renameCategory(oldName,newName){
+  newName=newName.trim();
+  if(!newName || groceries[newName]) return;
+  groceries[newName]=groceries[oldName];
+  delete groceries[oldName];
+  save();
+  render();
+}
+
+function deleteCategory(category){
+  delete groceries[category];
+  save();
+  render();
 }
 
 function addItem(category){
@@ -258,36 +249,6 @@ function addItem(category){
     selected:false
   });
 
-  save();
-  render();
-}
-
-function formatPrice(input, category, index){
-  let value=parseFloat(input.value)||0;
-  groceries[category][index].price=value;
-  input.value="₱"+value.toFixed(2);
-  save();
-}
-
-function renameCategory(oldName,newName){
-  newName=newName.trim();
-  if(!newName || groceries[newName]) return;
-  groceries[newName]=groceries[oldName];
-  delete groceries[oldName];
-  save();
-  render();
-}
-
-function addCategory(){
-  const name=document.getElementById("newCategory").value.trim();
-  if(!name || groceries[name]) return;
-  groceries[name]=[];
-  save();
-  render();
-}
-
-function deleteCategory(category){
-  delete groceries[category];
   save();
   render();
 }
@@ -340,7 +301,13 @@ function computeTotal(){
   alert("Total: ₱"+total.toFixed(2));
 }
 
-/* BACKUP SYSTEM */
+function formatPrice(input,category,index){
+  let value=parseFloat(input.value)||0;
+  groceries[category][index].price=value;
+  input.value="₱"+value.toFixed(2);
+  save();
+}
+
 function exportData(){
   const data=JSON.stringify(groceries);
   const blob=new Blob([data],{type:"application/json"});
@@ -361,7 +328,7 @@ function importData(event){
       groceries=JSON.parse(e.target.result);
       save();
       render();
-      alert("Backup Restored Successfully!");
+      alert("Backup Restored!");
     }catch{
       alert("Invalid backup file.");
     }
