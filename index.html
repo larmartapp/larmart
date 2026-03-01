@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAR Mart</title>
+
+<style>
+body{
+  font-family: Arial;
+  padding:15px;
+  background:#f2f2f2;
+}
+
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+.logo{
+  height:40px;
+}
+
+h2{
+  margin:0;
+}
+
+.top-add{
+  background:white;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:15px;
+}
+
+.category{
+  background:white;
+  padding:12px;
+  margin-bottom:15px;
+  border-radius:10px;
+}
+
+.item{
+  border:1px solid #ddd;
+  padding:8px;
+  margin-bottom:8px;
+  border-radius:6px;
+}
+
+.row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:6px;
+}
+
+input{ padding:4px; }
+
+.category-name{
+  font-weight:bold;
+  font-size:18px;
+  border:none;
+  background:transparent;
+}
+
+.qty{
+  width:40px;
+  text-align:center;
+}
+
+button{
+  padding:5px 8px;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
+}
+
+.select{ background:#2196F3; color:white; }
+.plus{ background:#4CAF50; color:white; }
+.minus{ background:#ff9800; color:white; }
+.delete{ background:#e53935; color:white; }
+.add{ background:#673AB7; color:white; }
+
+.finish{
+  width:100%;
+  padding:12px;
+  margin-top:15px;
+  background:#000;
+  color:white;
+  font-size:16px;
+}
+
+.selected{
+  background:#c8e6c9;
+}
+
+#searchBar{
+  width:100%;
+  margin-bottom:10px;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <img src="logo.png" class="logo">
+  <h2>LAR Mart</h2>
+</div>
+
+<div class="top-add">
+  <input id="searchBar" placeholder="Search category or item..." onkeyup="render()">
+  <input id="newCategory" placeholder="New Category">
+  <button class="add" onclick="addCategory()">Add Category</button>
+  <button class="delete" onclick="deleteAll()">Delete All</button>
+</div>
+
+<div id="list"></div>
+
+<button class="finish" onclick="computeTotal()">Finish & Compute Total</button>
+
+<script>
+
+let groceries = JSON.parse(localStorage.getItem("groceries")) || {
+  "Personal Care":[
+    {name:"Toothpaste", price:120, qty:1, selected:false}
+  ]
+};
+
+function normalize(){
+  Object.keys(groceries).forEach(cat=>{
+    groceries[cat].forEach(item=>{
+      if(!item.qty || isNaN(item.qty)) item.qty=1;
+      if(isNaN(item.price)) item.price=0;
+      if(typeof item.selected !== "boolean") item.selected=false;
+    });
+  });
+}
+
+function save(){
+  localStorage.setItem("groceries", JSON.stringify(groceries));
+}
+
+function render(){
+  normalize();
+  save();
+
+  const list=document.getElementById("list");
+  list.innerHTML="";
+
+  const searchValue=document.getElementById("searchBar").value.toLowerCase();
+
+  const sortedCategories=Object.keys(groceries).sort((a,b)=>a.localeCompare(b));
+
+  sortedCategories.forEach(category=>{
+
+    const categoryMatch=category.toLowerCase().includes(searchValue);
+
+    let hasMatch=false;
+
+    groceries[category].forEach(item=>{
+      if(
+        item.name.toLowerCase().includes(searchValue) ||
+        categoryMatch
+      ){
+        hasMatch=true;
+      }
+    });
+
+    if(searchValue && !hasMatch) return;
+
+    const catDiv=document.createElement("div");
+    catDiv.className="category";
+
+    catDiv.innerHTML=`
+      <input class="category-name"
+        value="${category}"
+        onchange="renameCategory('${category}',this.value)">
+      <button class="delete"
+        onclick="deleteCategory('${category}')">
+        Delete Category
+      </button>
+      <hr>
+    `;
+
+    groceries[category].forEach((item,index)=>{
+
+      if(searchValue &&
+         !categoryMatch &&
+         !item.name.toLowerCase().includes(searchValue))
+         return;
+
+      const itemDiv=document.createElement("div");
+      itemDiv.className="item";
+      if(item.selected) itemDiv.classList.add("selected");
+
+      itemDiv.innerHTML=`
+        <div>
+          <input value="${item.name}"
+            onchange="updateName('${category}',${index},this.value)">
+          <input type="text"
+            value="₱${parseFloat(item.price).toFixed(2)}"
+            onfocus="this.value=this.value.replace('₱','')"
+            onblur="formatPrice(this,'${category}',${index})">
+        </div>
+
+        <div class="row">
+          <button class="minus"
+            onclick="changeQty('${category}',${index},-1)">-</button>
+
+          <span class="qty">${item.qty}</span>
+
+          <button class="plus"
+            onclick="changeQty('${category}',${index},1)">+</button>
+
+          <button class="select"
+            onclick="toggleSelect('${category}',${index})">
+            ${item.selected ? "Unselect":"Select"}
+          </button>
+
+          <button class="delete"
+            onclick="deleteItem('${category}',${index})">
+            Delete
+          </button>
+        </div>
+      `;
+
+      catDiv.appendChild(itemDiv);
+    });
+
+    // ADD ITEM SECTION
+    catDiv.innerHTML += `
+      <input id="item-${category}" placeholder="Item Name">
+      <input id="price-${category}" type="number" placeholder="Price">
+      <button class="add"
+        onclick="addItem('${category}')">
+        Add Item
+      </button>
+    `;
+
+    list.appendChild(catDiv);
+  });
+}
+
+function addItem(category){
+  const name=document.getElementById("item-"+category).value.trim();
+  const price=parseFloat(document.getElementById("price-"+category).value)||0;
+
+  if(!name) return;
+
+  groceries[category].push({
+    name:name,
+    price:price,
+    qty:1,
+    selected:false
+  });
+
+  save();
+  render();
+}
+
+function formatPrice(input, category, index){
+  let value=parseFloat(input.value)||0;
+  groceries[category][index].price=value;
+  input.value="₱"+value.toFixed(2);
+  save();
+}
+
+function renameCategory(oldName,newName){
+  newName=newName.trim();
+  if(!newName || groceries[newName]) return;
+  groceries[newName]=groceries[oldName];
+  delete groceries[oldName];
+  save();
+  render();
+}
+
+function addCategory(){
+  const name=document.getElementById("newCategory").value.trim();
+  if(!name || groceries[name]) return;
+  groceries[name]=[];
+  save();
+  render();
+}
+
+function deleteCategory(category){
+  delete groceries[category];
+  save();
+  render();
+}
+
+function toggleSelect(category,index){
+  groceries[category][index].selected=
+    !groceries[category][index].selected;
+  save();
+  render();
+}
+
+function changeQty(category,index,amount){
+  let current=parseInt(groceries[category][index].qty)||1;
+  current+=amount;
+  if(current<1) current=1;
+  groceries[category][index].qty=current;
+  save();
+  render();
+}
+
+function updateName(category,index,value){
+  groceries[category][index].name=value;
+  save();
+}
+
+function deleteItem(category,index){
+  groceries[category].splice(index,1);
+  save();
+  render();
+}
+
+function deleteAll(){
+  if(confirm("Delete everything?")){
+    groceries={};
+    localStorage.removeItem("groceries");
+    render();
+  }
+}
+
+function computeTotal(){
+  let total=0;
+
+  Object.keys(groceries).forEach(category=>{
+    groceries[category].forEach(item=>{
+      if(item.selected){
+        total+=(parseFloat(item.price)||0)*
+               (parseInt(item.qty)||1);
+      }
+    });
+  });
+
+  alert("Total: ₱"+total.toFixed(2));
+}
+
+render();
+
+</script>
+
+</body>
+</html>
