@@ -118,6 +118,9 @@ button{
   <input id="newCategory" placeholder="New Category">
   <button class="add" onclick="addCategory()">Add Category</button>
   <button class="delete" onclick="deleteAll()">Delete All</button>
+  <button onclick="exportData()">Export Backup</button>
+  <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+  <button onclick="document.getElementById('importFile').click()">Import Backup</button>
 </div>
 
 <div id="list"></div>
@@ -164,10 +167,7 @@ function render(){
     let hasMatch=false;
 
     groceries[category].forEach(item=>{
-      if(
-        item.name.toLowerCase().includes(searchValue) ||
-        categoryMatch
-      ){
+      if(item.name.toLowerCase().includes(searchValue) || categoryMatch){
         hasMatch=true;
       }
     });
@@ -233,7 +233,6 @@ function render(){
       catDiv.appendChild(itemDiv);
     });
 
-    // ADD ITEM SECTION
     catDiv.innerHTML += `
       <input id="item-${category}" placeholder="Item Name">
       <input id="price-${category}" type="number" placeholder="Price">
@@ -250,7 +249,6 @@ function render(){
 function addItem(category){
   const name=document.getElementById("item-"+category).value.trim();
   const price=parseFloat(document.getElementById("price-"+category).value)||0;
-
   if(!name) return;
 
   groceries[category].push({
@@ -331,7 +329,6 @@ function deleteAll(){
 
 function computeTotal(){
   let total=0;
-
   Object.keys(groceries).forEach(category=>{
     groceries[category].forEach(item=>{
       if(item.selected){
@@ -340,8 +337,36 @@ function computeTotal(){
       }
     });
   });
-
   alert("Total: ₱"+total.toFixed(2));
+}
+
+/* BACKUP SYSTEM */
+function exportData(){
+  const data=JSON.stringify(groceries);
+  const blob=new Blob([data],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="lar-mart-backup.json";
+  a.click();
+}
+
+function importData(event){
+  const file=event.target.files[0];
+  if(!file) return;
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      groceries=JSON.parse(e.target.result);
+      save();
+      render();
+      alert("Backup Restored Successfully!");
+    }catch{
+      alert("Invalid backup file.");
+    }
+  };
+  reader.readAsText(file);
 }
 
 render();
