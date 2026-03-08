@@ -1,205 +1,342 @@
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>LAR Mart</title>
 
+<!-- PWA Settings -->
 <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
 
 <style>
-
 body{
-font-family:Arial;
-margin:0;
-background:#f2f2f2;
+  font-family: Arial;
+  padding:15px;
+  background:#f2f2f2;
 }
 
 .header{
-display:flex;
-align-items:center;
-gap:10px;
-background:#2c3e50;
-color:white;
-padding:15px;
-font-size:22px;
-font-weight:bold;
+  text-align:center;
 }
 
-.header img{
-width:40px;
-height:40px;
+h2{ margin:0; }
+
+.top-add{
+  background:white;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:15px;
 }
 
-.container{
-padding:20px;
+.category{
+  background:white;
+  padding:12px;
+  margin-bottom:15px;
+  border-radius:10px;
 }
 
-input{
-padding:10px;
-margin:5px;
+.item{
+  border:1px solid #ddd;
+  padding:8px;
+  margin-bottom:8px;
+  border-radius:6px;
+}
+
+.row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:6px;
+}
+
+input{ padding:4px; }
+
+.qty{
+  width:40px;
+  text-align:center;
 }
 
 button{
-padding:10px 15px;
-margin:5px;
-cursor:pointer;
+  padding:5px 8px;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
 }
 
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:20px;
-background:white;
+.select{ background:#2196F3; color:white; }
+.plus{ background:#4CAF50; color:white; }
+.minus{ background:#ff9800; color:white; }
+.delete{ background:#e53935; color:white; }
+.add{ background:#673AB7; color:white; }
+
+.finish{
+  width:100%;
+  padding:12px;
+  margin-top:15px;
+  background:#000;
+  color:white;
+  font-size:16px;
 }
 
-th, td{
-border:1px solid #ddd;
-padding:10px;
-text-align:left;
+.selected{
+  background:#c8e6c9;
 }
 
-th{
-background:#34495e;
-color:white;
+#searchBar{
+  width:100%;
+  padding:8px;
+  margin-bottom:10px;
 }
-
-.search{
-margin-top:10px;
-}
-
 </style>
-
 </head>
 
 <body>
 
 <div class="header">
-<img src="icon.png">
-LAR Mart
+  <h2>LAR Mart</h2>
 </div>
 
-<div class="container">
-
-<input type="text" id="itemName" placeholder="Item name">
-<input type="number" id="itemQty" placeholder="Qty">
-
-<button onclick="addItem()">Add Item</button>
-<button onclick="backupData()">Backup</button>
-
-<br><br>
-
-<input class="search" type="text" id="search" placeholder="Search item..." onkeyup="searchItem()">
-
-<table id="inventoryTable">
-
-<thead>
-<tr>
-<th>Item</th>
-<th>Qty</th>
-<th>Action</th>
-</tr>
-</thead>
-
-<tbody id="inventoryBody">
-</tbody>
-
-</table>
-
+<div class="top-add">
+  <input id="searchBar" placeholder="Search..." onkeyup="render()">
+  <input id="newCategory" placeholder="New Category">
+  <button class="add" onclick="addCategory()">Add Category</button>
+  <button class="delete" onclick="deleteAll()">Delete All</button>
+  <button onclick="exportData()">Export Backup</button>
+  <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+  <button onclick="document.getElementById('importFile').click()">Import Backup</button>
 </div>
+
+<div id="list"></div>
+
+<button class="finish" onclick="computeTotal()">Finish & Compute Total</button>
 
 <script>
 
-let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
+let groceries = JSON.parse(localStorage.getItem("groceries")) || {
+  "Personal Care":[
+    {name:"Toothpaste", price:120, qty:1, selected:false}
+  ]
+};
 
-function saveData(){
-localStorage.setItem("inventory", JSON.stringify(inventory));
+function normalize(){
+  Object.keys(groceries).forEach(cat=>{
+    groceries[cat].forEach(item=>{
+      if(!item.qty || isNaN(item.qty)) item.qty=1;
+      if(isNaN(item.price)) item.price=0;
+      if(typeof item.selected !== "boolean") item.selected=false;
+    });
+  });
 }
 
-function displayItems(){
-
-let body = document.getElementById("inventoryBody");
-body.innerHTML="";
-
-inventory.forEach((item,index)=>{
-
-let row=`
-<tr>
-<td>${item.name}</td>
-<td>${item.qty}</td>
-<td>
-<button onclick="deleteItem(${index})">Delete</button>
-</td>
-</tr>
-`;
-
-body.innerHTML+=row;
-
-});
-
+function save(){
+  localStorage.setItem("groceries", JSON.stringify(groceries));
 }
 
-function addItem(){
+function render(){
+  normalize();
+  save();
 
-let name=document.getElementById("itemName").value;
-let qty=document.getElementById("itemQty").value;
+  const list=document.getElementById("list");
+  list.innerHTML="";
 
-if(name=="" || qty==""){
-alert("Enter item and qty");
-return;
+  const search=document.getElementById("searchBar").value.toLowerCase();
+
+  const sorted=Object.keys(groceries).sort((a,b)=>a.localeCompare(b));
+
+  sorted.forEach(category=>{
+
+    if(search && !category.toLowerCase().includes(search) &&
+       !groceries[category].some(i=>i.name.toLowerCase().includes(search)))
+       return;
+
+    const catDiv=document.createElement("div");
+    catDiv.className="category";
+
+    catDiv.innerHTML=`
+      <input value="${category}"
+        onchange="renameCategory('${category}',this.value)">
+      <button class="delete"
+        onclick="deleteCategory('${category}')">
+        Delete Category
+      </button>
+      <hr>
+    `;
+
+    groceries[category].forEach((item,index)=>{
+
+      if(search && !item.name.toLowerCase().includes(search)) return;
+
+      const itemDiv=document.createElement("div");
+      itemDiv.className="item";
+      if(item.selected) itemDiv.classList.add("selected");
+
+      itemDiv.innerHTML=`
+        <div>
+          <input value="${item.name}"
+            onchange="updateName('${category}',${index},this.value)">
+          <input type="text"
+            value="₱${parseFloat(item.price).toFixed(2)}"
+            onfocus="this.value=this.value.replace('₱','')"
+            onblur="formatPrice(this,'${category}',${index})">
+        </div>
+
+        <div class="row">
+          <button class="minus"
+            onclick="changeQty('${category}',${index},-1)">-</button>
+          <span class="qty">${item.qty}</span>
+          <button class="plus"
+            onclick="changeQty('${category}',${index},1)">+</button>
+          <button class="select"
+            onclick="toggleSelect('${category}',${index})">
+            ${item.selected ? "Unselect":"Select"}
+          </button>
+          <button class="delete"
+            onclick="deleteItem('${category}',${index})">
+            Delete
+          </button>
+        </div>
+      `;
+
+      catDiv.appendChild(itemDiv);
+    });
+
+    catDiv.innerHTML+=`
+      <input id="item-${category}" placeholder="Item Name">
+      <input id="price-${category}" type="number" placeholder="Price">
+      <button class="add" onclick="addItem('${category}')">Add Item</button>
+    `;
+
+    list.appendChild(catDiv);
+  });
 }
 
-inventory.push({name:name,qty:qty});
+/* All existing logic unchanged */
 
-saveData();
-displayItems();
-
-document.getElementById("itemName").value="";
-document.getElementById("itemQty").value="";
-
+function addCategory(){
+  const name=document.getElementById("newCategory").value.trim();
+  if(!name || groceries[name]) return;
+  groceries[name]=[];
+  save();
+  render();
 }
 
-function deleteItem(index){
-
-inventory.splice(index,1);
-
-saveData();
-displayItems();
-
+function renameCategory(oldName,newName){
+  newName=newName.trim();
+  if(!newName || groceries[newName]) return;
+  groceries[newName]=groceries[oldName];
+  delete groceries[oldName];
+  save();
+  render();
 }
 
-function searchItem(){
-
-let input=document.getElementById("search").value.toLowerCase();
-
-let rows=document.querySelectorAll("#inventoryBody tr");
-
-rows.forEach(row=>{
-
-let text=row.innerText.toLowerCase();
-
-row.style.display=text.includes(input) ? "" : "none";
-
-});
-
+function deleteCategory(category){
+  delete groceries[category];
+  save();
+  render();
 }
 
-function backupData(){
+function addItem(category){
+  const name=document.getElementById("item-"+category).value.trim();
+  const price=parseFloat(document.getElementById("price-"+category).value)||0;
+  if(!name) return;
 
-let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(inventory));
+  groceries[category].push({
+    name:name,
+    price:price,
+    qty:1,
+    selected:false
+  });
 
-let dl = document.createElement("a");
-
-dl.setAttribute("href", dataStr);
-dl.setAttribute("download", "LARmart_backup.json");
-
-dl.click();
-
+  save();
+  render();
 }
 
-displayItems();
+function toggleSelect(category,index){
+  groceries[category][index].selected=
+    !groceries[category][index].selected;
+  save();
+  render();
+}
+
+function changeQty(category,index,amount){
+  let current=parseInt(groceries[category][index].qty)||1;
+  current+=amount;
+  if(current<1) current=1;
+  groceries[category][index].qty=current;
+  save();
+  render();
+}
+
+function updateName(category,index,value){
+  groceries[category][index].name=value;
+  save();
+}
+
+function deleteItem(category,index){
+  groceries[category].splice(index,1);
+  save();
+  render();
+}
+
+function deleteAll(){
+  if(confirm("Delete everything?")){
+    groceries={};
+    localStorage.removeItem("groceries");
+    render();
+  }
+}
+
+function computeTotal(){
+  let total=0;
+  Object.keys(groceries).forEach(category=>{
+    groceries[category].forEach(item=>{
+      if(item.selected){
+        total+=(parseFloat(item.price)||0)*
+               (parseInt(item.qty)||1);
+      }
+    });
+  });
+  alert("Total: ₱"+total.toFixed(2));
+}
+
+function formatPrice(input,category,index){
+  let value=parseFloat(input.value)||0;
+  groceries[category][index].price=value;
+  input.value="₱"+value.toFixed(2);
+  save();
+}
+
+function exportData(){
+  const data=JSON.stringify(groceries);
+  const blob=new Blob([data],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="lar-mart-backup.json";
+  a.click();
+}
+
+function importData(event){
+  const file=event.target.files[0];
+  if(!file) return;
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      groceries=JSON.parse(e.target.result);
+      save();
+      render();
+      alert("Backup Restored!");
+    }catch{
+      alert("Invalid backup file.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+render();
 
 </script>
 
