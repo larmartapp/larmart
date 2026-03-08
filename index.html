@@ -188,7 +188,13 @@ function render(){
       <hr>
     `;
 
-    groceries[category].forEach((item,index)=>{
+    /* AUTO SORT ITEMS A-Z */
+    const sortedItems=[...groceries[category]]
+      .sort((a,b)=>a.name.localeCompare(b.name));
+
+    sortedItems.forEach(item=>{
+
+      const index=groceries[category].indexOf(item);
 
       if(searchValue &&
          !categoryMatch &&
