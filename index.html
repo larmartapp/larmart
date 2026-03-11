@@ -191,7 +191,10 @@ function render(){
 
     const sortedItems=[...groceries[category]].sort((a,b)=>a.name.localeCompare(b.name));
 
-    sortedItems.forEach((item, index)=>{
+    sortedItems.forEach((item)=>{
+      // Get correct index in original array for all operations
+      const originalIndex = groceries[category].findIndex(i => i === item);
+
       if(searchValue && !categoryMatch && !item.name.toLowerCase().includes(searchValue)) return;
 
       const itemDiv=document.createElement("div");
@@ -200,22 +203,23 @@ function render(){
 
       itemDiv.innerHTML=`
         <div>
-          <input value="${item.name}" onchange="updateName('${category}',${index},this.value)">
+          <input value="${item.name}" onchange="updateName('${category}',${originalIndex},this.value)">
           <input type="text" value="₱${parseFloat(item.price).toFixed(2)}"
             onfocus="this.value=this.value.replace('₱','')"
-            onblur="formatPrice(this,'${category}',${index})">
+            onblur="formatPrice(this,'${category}',${originalIndex})">
         </div>
 
         <div class="row">
-          <button class="minus" onclick="changeQty('${category}',${index},-1)">-</button>
+          <button class="minus" onclick="changeQty('${category}',${originalIndex},-1)">-</button>
           <span class="qty">${item.qty}</span>
-          <button class="plus" onclick="changeQty('${category}',${index},1)">+</button>
-          <button class="select" onclick="toggleSelect('${category}',${index})">
+          <button class="plus" onclick="changeQty('${category}',${originalIndex},1)">+</button>
+          <button class="select" onclick="toggleSelect('${category}',${originalIndex})">
             ${item.selected ? "Unselect":"Select"}
           </button>
-          <button class="delete" onclick="deleteItem('${category}',${index})">Delete</button>
+          <button class="delete" onclick="deleteItem('${category}',${originalIndex})">Delete</button>
         </div>
       `;
+
       catDiv.appendChild(itemDiv);
     });
 
