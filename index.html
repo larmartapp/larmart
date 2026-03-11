@@ -132,7 +132,7 @@ button{
 <button class="finish" onclick="computeTotal()">Finish & Compute Total</button>
 
 <script>
-/* ===== SERVICE WORKER REGISTRATION ===== */
+/* ===== SERVICE WORKER ===== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./service-worker.js');
@@ -141,7 +141,7 @@ if ('serviceWorker' in navigator) {
 
 /* ===== APP DATA ===== */
 let groceries = JSON.parse(localStorage.getItem("groceries")) || {
-  "Personal Care":[ {name:"Toothpaste", price:120, qty:1, selected:false} ]
+  "Personal Care":[ {id: Date.now(), name:"Toothpaste", price:120, qty:1, selected:false} ]
 };
 
 /* ===== HELPER FUNCTIONS ===== */
@@ -151,6 +151,7 @@ function normalize(){
       if(!item.qty || isNaN(item.qty)) item.qty=1;
       if(isNaN(item.price)) item.price=0;
       if(typeof item.selected !== "boolean") item.selected=false;
+      if(!item.id) item.id = Date.now() + Math.random(); // ensure unique id
     });
   });
 }
@@ -163,6 +164,7 @@ function save(){
 function render(){
   normalize();
   save();
+
   const list=document.getElementById("list");
   list.innerHTML="";
 
@@ -174,9 +176,7 @@ function render(){
     let hasMatch=false;
 
     groceries[category].forEach(item=>{
-      if(item.name.toLowerCase().includes(searchValue) || categoryMatch){
-        hasMatch=true;
-      }
+      if(item.name.toLowerCase().includes(searchValue) || categoryMatch) hasMatch=true;
     });
     if(searchValue && !hasMatch) return;
 
@@ -191,10 +191,7 @@ function render(){
 
     const sortedItems=[...groceries[category]].sort((a,b)=>a.name.localeCompare(b.name));
 
-    sortedItems.forEach((item)=>{
-      // Get correct index in original array for all operations
-      const originalIndex = groceries[category].findIndex(i => i === item);
-
+    sortedItems.forEach(item=>{
       if(searchValue && !categoryMatch && !item.name.toLowerCase().includes(searchValue)) return;
 
       const itemDiv=document.createElement("div");
@@ -203,20 +200,20 @@ function render(){
 
       itemDiv.innerHTML=`
         <div>
-          <input value="${item.name}" onchange="updateName('${category}',${originalIndex},this.value)">
+          <input value="${item.name}" onchange="updateNameById('${category}',${item.id},this.value)">
           <input type="text" value="₱${parseFloat(item.price).toFixed(2)}"
             onfocus="this.value=this.value.replace('₱','')"
-            onblur="formatPrice(this,'${category}',${originalIndex})">
+            onblur="formatPriceById('${category}',${item.id},this)">
         </div>
 
         <div class="row">
-          <button class="minus" onclick="changeQty('${category}',${originalIndex},-1)">-</button>
+          <button class="minus" onclick="changeQtyById('${category}',${item.id},-1)">-</button>
           <span class="qty">${item.qty}</span>
-          <button class="plus" onclick="changeQty('${category}',${originalIndex},1)">+</button>
-          <button class="select" onclick="toggleSelect('${category}',${originalIndex})">
+          <button class="plus" onclick="changeQtyById('${category}',${item.id},1)">+</button>
+          <button class="select" onclick="toggleSelectById('${category}',${item.id})">
             ${item.selected ? "Unselect":"Select"}
           </button>
-          <button class="delete" onclick="deleteItem('${category}',${originalIndex})">Delete</button>
+          <button class="delete" onclick="deleteItemById('${category}',${item.id})">Delete</button>
         </div>
       `;
 
@@ -233,26 +230,72 @@ function render(){
   });
 }
 
-/* ===== ITEM / CATEGORY FUNCTIONS ===== */
+/* ===== ITEM / CATEGORY FUNCTIONS (ID-BASED) ===== */
 function addItem(category){
   const name=document.getElementById("item-"+category).value.trim();
   const price=parseFloat(document.getElementById("price-"+category).value)||0;
   if(!name) return;
 
-  groceries[category].push({name, price, qty:1, selected:false});
+  groceries[category].push({
+    id: Date.now() + Math.random(),
+    name,
+    price,
+    qty:1,
+    selected:false
+  });
   save();
   render();
-
-  // Clear inputs
-  document.getElementById("item-"+category).value = "";
-  document.getElementById("price-"+category).value = "";
+  document.getElementById("item-"+category).value="";
+  document.getElementById("price-"+category).value="";
 }
 
-function formatPrice(input, category, index){
-  let value=parseFloat(input.value)||0;
-  groceries[category][index].price=value;
-  input.value="₱"+value.toFixed(2);
+function toggleSelectById(category, id){
+  const item = groceries[category].find(i => i.id === id);
+  if(!item) return;
+  item.selected = !item.selected;
   save();
+  render();
+}
+
+function changeQtyById(category, id, amount){
+  const item = groceries[category].find(i => i.id === id);
+  if(!item) return;
+  item.qty = Math.max(1, item.qty + amount);
+  save();
+  render();
+}
+
+function updateNameById(category, id, value){
+  const item = groceries[category].find(i => i.id === id);
+  if(!item) return;
+  item.name = value;
+  save();
+}
+
+function formatPriceById(category, id, input){
+  const item = groceries[category].find(i => i.id === id);
+  if(!item) return;
+  item.price = parseFloat(input.value)||0;
+  input.value = "₱" + item.price.toFixed(2);
+  save();
+}
+
+function deleteItemById(category, id){
+  const index = groceries[category].findIndex(i => i.id === id);
+  if(index < 0) return;
+  groceries[category].splice(index,1);
+  save();
+  render();
+}
+
+/* ===== CATEGORY FUNCTIONS ===== */
+function addCategory(){
+  const name=document.getElementById("newCategory").value.trim();
+  if(!name || groceries[name]) return;
+  groceries[name]=[];
+  save();
+  render();
+  document.getElementById("newCategory").value="";
 }
 
 function renameCategory(oldName,newName){
@@ -265,38 +308,11 @@ function renameCategory(oldName,newName){
   render();
 }
 
-function addCategory(){
-  const name=document.getElementById("newCategory").value.trim();
-  if(!name || groceries[name]) return;
-  groceries[name]=[];
-  save();
-  render();
-  document.getElementById("newCategory").value="";
-}
-
 function deleteCategory(category){ delete groceries[category]; save(); render(); }
-
-function toggleSelect(category,index){
-  groceries[category][index].selected=!groceries[category][index].selected;
-  save();
-  render();
-}
-
-function changeQty(category,index,amount){
-  let current=parseInt(groceries[category][index].qty)||1;
-  current+=amount;
-  if(current<1) current=1;
-  groceries[category][index].qty=current;
-  save();
-  render();
-}
-
-function updateName(category,index,value){ groceries[category][index].name=value; save(); }
-
-function deleteItem(category,index){ groceries[category].splice(index,1); save(); render(); }
 
 function deleteAll(){ if(confirm("Delete everything?")){ groceries={}; localStorage.removeItem("groceries"); render(); } }
 
+/* ===== COMPUTE TOTAL ===== */
 function computeTotal(){
   let total=0;
   Object.keys(groceries).forEach(category=>{
